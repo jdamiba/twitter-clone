@@ -1,9 +1,13 @@
 import { useState } from "react";
 
-export default function PostForm({ onPostCreated }) {
+interface PostFormProps {
+  onPostCreated: () => void;
+}
+
+export default function PostForm({ onPostCreated }: PostFormProps) {
   const [content, setContent] = useState("");
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (content.trim()) {
       try {

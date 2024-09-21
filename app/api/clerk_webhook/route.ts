@@ -70,12 +70,12 @@ export async function POST(req: Request) {
       try {
         // Insert or update user in the database
         await sql`
-          INSERT INTO users (id, email, first_name, last_name, image_url, created_at, subscription_tier)
+          INSERT INTO users (id, email, username, first_name, last_name, image_url, created_at, subscription_tier)
           VALUES (${id}, ${primaryEmail.email_address}, ${
-          first_name || null
-        }, ${last_name || null}, ${image_url || null}, to_timestamp(${
-          created_at / 1000
-        }), 'free')
+          primaryEmail.email_address
+        }, ${first_name || null}, ${last_name || null}, ${
+          image_url || null
+        }, to_timestamp(${created_at / 1000}), 'free')
           ON CONFLICT (id) DO UPDATE SET
             email = EXCLUDED.email,
             first_name = EXCLUDED.first_name,

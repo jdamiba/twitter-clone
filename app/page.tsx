@@ -20,8 +20,6 @@ interface Post {
   replies?: Post[];
 }
 
-const initialPosts: Post[] = [];
-
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPostContent, setNewPostContent] = useState<string>("");

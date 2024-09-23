@@ -146,7 +146,7 @@ export default function PostPage() {
       </Link>
       <div className="bg-white p-6 rounded shadow">
         <h1 className="text-2xl font-bold mb-4 text-black">
-          {post.username}'s Post
+          {post.username}&apos;s Post
         </h1>
         <p className="text-lg mb-4 text-black">{post.content}</p>
         <small className="text-gray-500 block">

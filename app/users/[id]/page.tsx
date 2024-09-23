@@ -133,13 +133,13 @@ export default function UserProfilePage({
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">
-        {profileUser.display_name}'s Profile
+        {profileUser.display_name}&apos;s Profile
       </h1>
       <p className="mb-4">@{profileUser.username}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
-          <h2 className="text-2xl font-semibold mb-4">User's Posts</h2>
+          <h2 className="text-2xl font-semibold mb-4">User&apos;s Posts</h2>
           {renderPosts(userPosts)}
         </div>
         <div>

@@ -98,7 +98,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 // Seed database with diverse posts for each user
-export async function PATCH(request: NextRequest) {
+export async function PATCH() {
   try {
     // Fetch all users
     const usersResult = await sql`SELECT id, username FROM users`;

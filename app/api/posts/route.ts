@@ -1,71 +1,78 @@
-import { sql } from "@vercel/postgres";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-
-const POSTS_PER_PAGE = 10;
+import { sql } from "@vercel/postgres";
 
 export async function GET(request: Request) {
-  const { userId } = auth();
   const { searchParams } = new URL(request.url);
-  const page = parseInt(searchParams.get("page") || "1", 10);
-  const offset = (page - 1) * POSTS_PER_PAGE;
+  const userId = searchParams.get("userId");
+  const likedBy = searchParams.get("likedBy");
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = 10;
+  const offset = (page - 1) * limit;
 
   try {
-    const result = await sql`
-      WITH post_data AS (
-        SELECT 
-          p.id, p.content, p.created_at, p.updated_at, p.user_id, p.reply_to_id,
-          u.username, u.display_name,
-          COALESCE(l.like_count, 0) as likes_count,
-          CASE WHEN ul.user_id IS NOT NULL THEN true ELSE false END as is_liked
+    let postsQuery, countQuery;
+    const { userId: currentUserId } = auth();
+
+    if (userId) {
+      postsQuery = sql`
+        SELECT p.*, u.username, u.display_name,
+               (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+               EXISTS(SELECT 1 FROM likes WHERE post_id = p.id AND user_id = ${currentUserId}) as is_liked
         FROM posts p
         JOIN users u ON p.user_id = u.id
-        LEFT JOIN (
-          SELECT post_id, COUNT(*) as like_count
-          FROM likes
-          GROUP BY post_id
-        ) l ON p.id = l.post_id
-        LEFT JOIN likes ul ON p.id = ul.post_id AND ul.user_id = ${userId}
-        WHERE p.reply_to_id IS NULL
+        WHERE p.user_id = ${userId}
         ORDER BY p.created_at DESC
-        LIMIT ${POSTS_PER_PAGE} OFFSET ${offset}
-      )
-      SELECT 
-        pd.*,
-        (SELECT json_agg(r) FROM (
-          SELECT 
-            r.id, r.content, r.created_at, r.updated_at, r.user_id,
-            u.username, u.display_name,
-            COALESCE(rl.like_count, 0) as likes_count,
-            CASE WHEN rul.user_id IS NOT NULL THEN true ELSE false END as is_liked
-          FROM posts r
-          JOIN users u ON r.user_id = u.id
-          LEFT JOIN (
-            SELECT post_id, COUNT(*) as like_count
-            FROM likes
-            GROUP BY post_id
-          ) rl ON r.id = rl.post_id
-          LEFT JOIN likes rul ON r.id = rul.post_id AND rul.user_id = ${userId}
-          WHERE r.reply_to_id = pd.id
-          ORDER BY r.created_at ASC
-        ) r) as replies
-      FROM post_data pd
-    `;
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countQuery = sql`SELECT COUNT(*) FROM posts WHERE user_id = ${userId}`;
+    } else if (likedBy) {
+      postsQuery = sql`
+        SELECT p.*, u.username, u.display_name,
+               (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+               EXISTS(SELECT 1 FROM likes WHERE post_id = p.id AND user_id = ${currentUserId}) as is_liked
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        JOIN likes l ON p.id = l.post_id
+        WHERE l.user_id = ${likedBy}
+        ORDER BY p.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countQuery = sql`SELECT COUNT(*) FROM likes WHERE user_id = ${likedBy}`;
+    } else {
+      postsQuery = sql`
+        SELECT p.*, u.username, u.display_name,
+               (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+               EXISTS(SELECT 1 FROM likes WHERE post_id = p.id AND user_id = ${currentUserId}) as is_liked
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        ORDER BY p.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countQuery = sql`SELECT COUNT(*) FROM posts`;
+    }
 
-    const posts = result.rows;
+    const [postsResult, countResult] = await Promise.all([
+      postsQuery,
+      countQuery,
+    ]);
+    const posts = postsResult.rows;
+    const totalPosts = parseInt(countResult.rows[0].count);
 
-    // Get total count of posts for pagination
-    const countResult = await sql`
-      SELECT COUNT(*) FROM posts WHERE reply_to_id IS NULL
-    `;
-    const totalPosts = parseInt(countResult.rows[0].count, 10);
-    const totalPages = Math.ceil(totalPosts / POSTS_PER_PAGE);
+    const formattedPosts = posts.map((post) => ({
+      ...post,
+      isLiked: post.is_liked,
+    }));
 
-    return NextResponse.json({ posts, totalPages, currentPage: page });
+    return NextResponse.json({
+      posts: formattedPosts,
+      currentPage: page,
+      totalPages: Math.ceil(totalPosts / limit),
+    });
   } catch (error) {
     console.error("Error fetching posts:", error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: "Error fetching posts" },
       { status: 500 }
     );
   }

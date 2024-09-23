@@ -22,8 +22,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "To-Do App",
-  description: "A simple to-do list application",
+  title: "Twitter Clone",
+  description: "A Twitter clone application",
 };
 
 export default function RootLayout({
@@ -35,14 +35,13 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100`}
         >
-          <header className="bg-gray-100 py-4 px-6 flex justify-between items-center">
+          <header className="bg-white py-4 px-6 flex justify-between items-center shadow-sm">
             <Link href="/" className="text-xl font-bold text-black">
-              To-Do App
+              Twitter Clone
             </Link>
             <div className="flex items-center text-black">
-              {/* Placeholder for Clerk sign-in and user icon */}
               <SignedOut>
                 <SignInButton />
               </SignedOut>
@@ -51,7 +50,7 @@ export default function RootLayout({
               </SignedIn>
             </div>
           </header>
-          <main className="container mx-auto px-4 py-8">{children}</main>
+          <main>{children}</main>
         </body>
       </html>
     </ClerkProvider>

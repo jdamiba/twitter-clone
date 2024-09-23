@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 
 interface Post {
-  id: number;
+  id: string;
   content: string;
   created_at: string;
   updated_at: string;
@@ -13,58 +12,68 @@ interface Post {
   username: string;
   display_name: string;
   isLiked: boolean;
-  original_content?: string;
-  is_edited: boolean;
   likes_count: number;
 }
 
-export default function UserProfilePage({
-  params,
-}: {
-  params: { id: string };
-}) {
+// Add this new interface
+interface ProfileUser {
+  username: string;
+  display_name: string;
+  // Add any other properties that the user object might have
+}
+
+export default function UserProfile({ params }: { params: { id: string } }) {
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [likedPosts, setLikedPosts] = useState<Post[]>([]);
-  const [profileUser, setProfileUser] = useState<{
-    username: string;
-    display_name: string;
-  } | null>(null);
-  const { user } = useUser();
+  // Change this line
+  const [profileUser, setProfileUser] = useState<ProfileUser | null>(null);
 
   useEffect(() => {
     async function fetchUserData() {
       try {
-        const [postsResponse, likedPostsResponse, userResponse] =
-          await Promise.all([
-            fetch(`/api/posts?userId=${params.id}`),
-            fetch(`/api/posts/liked?userId=${params.id}`),
-            fetch(`/api/users/${params.id}`),
-          ]);
-
-        const postsData = await postsResponse.json();
-        const likedPostsData = await likedPostsResponse.json();
-        const userData = await userResponse.json();
-
-        setUserPosts(postsData.posts);
-        setLikedPosts(likedPostsData.posts);
-        setProfileUser(userData.user);
+        const response = await fetch(`/api/users/${params.id}`);
+        const data = await response.json();
+        // Ensure that the data matches the ProfileUser interface
+        setProfileUser(data.user as ProfileUser);
       } catch (error) {
         console.error("Error fetching user data:", error);
       }
     }
 
+    async function fetchUserPosts() {
+      try {
+        const response = await fetch(`/api/posts?userId=${params.id}`);
+        const data = await response.json();
+        setUserPosts(data.posts);
+      } catch (error) {
+        console.error("Error fetching user posts:", error);
+      }
+    }
+
+    async function fetchLikedPosts() {
+      try {
+        const response = await fetch(`/api/posts?likedBy=${params.id}`);
+        const data = await response.json();
+        setLikedPosts(data.posts);
+      } catch (error) {
+        console.error("Error fetching liked posts:", error);
+      }
+    }
     fetchUserData();
+    fetchUserPosts();
+    fetchLikedPosts();
   }, [params.id]);
 
-  const handleLikePost = async (postId: number) => {
+  const handleLikePost = async (postId: string) => {
     try {
       const response = await fetch(`/api/posts/${postId}/like`, {
         method: "POST",
       });
       const data = await response.json();
       if (data.success) {
-        setUserPosts(
-          userPosts.map((post) =>
+        // Update userPosts
+        setUserPosts((prevPosts) =>
+          prevPosts.map((post) =>
             post.id === postId
               ? {
                   ...post,
@@ -76,19 +85,44 @@ export default function UserProfilePage({
               : post
           )
         );
-        setLikedPosts(
-          likedPosts.map((post) =>
-            post.id === postId
-              ? {
-                  ...post,
-                  isLiked: !post.isLiked,
-                  likes_count: post.isLiked
-                    ? post.likes_count - 1
-                    : post.likes_count + 1,
-                }
-              : post
-          )
-        );
+
+        // Update likedPosts
+        setLikedPosts((prevLikedPosts) => {
+          const postIndex = prevLikedPosts.findIndex(
+            (post) => post.id === postId
+          );
+          if (postIndex !== -1) {
+            // Post is in likedPosts, remove it if unliked
+            if (prevLikedPosts[postIndex].isLiked) {
+              return prevLikedPosts.filter((post) => post.id !== postId);
+            } else {
+              // Update the like status and count
+              return prevLikedPosts.map((post) =>
+                post.id === postId
+                  ? {
+                      ...post,
+                      isLiked: true,
+                      likes_count: post.likes_count + 1,
+                    }
+                  : post
+              );
+            }
+          } else {
+            // Post is not in likedPosts, add it if liked
+            const likedPost = userPosts.find((post) => post.id === postId);
+            if (likedPost && !likedPost.isLiked) {
+              return [
+                ...prevLikedPosts,
+                {
+                  ...likedPost,
+                  isLiked: true,
+                  likes_count: likedPost.likes_count + 1,
+                },
+              ];
+            }
+          }
+          return prevLikedPosts;
+        });
       } else {
         console.error("Error liking post:", data.error);
       }
@@ -97,18 +131,28 @@ export default function UserProfilePage({
     }
   };
 
-  const renderPosts = (posts: Post[]) => (
-    <ul className="space-y-4">
-      {posts.map((post) => (
-        <li key={post.id} className="bg-white p-4 rounded shadow">
-          <Link href={`/posts/${post.id}`}>
-            <p className="text-lg mb-2 text-black">{post.content}</p>
+  if (!profileUser) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-4 text-black">
+        {profileUser.username}&apos;s Profile
+      </h1>
+      <p className="mb-8 text-black">
+        Display Name: {profileUser.display_name}
+      </p>
+
+      <h2 className="text-2xl font-bold mb-4 text-black">User&apos;s Posts</h2>
+      <ul className="space-y-4 mb-8">
+        {userPosts.map((post) => (
+          <li key={post.id} className="bg-white p-4 rounded shadow">
+            <p className="mb-2 text-black">{post.content}</p>
             <small className="text-gray-500">
-              {post.username} - {new Date(post.created_at).toLocaleString()}
+              {new Date(post.created_at).toLocaleString()}
             </small>
-          </Link>
-          <div className="mt-2">
-            {user && user.id !== post.user_id ? (
+            <div className="mt-2">
               <button
                 onClick={() => handleLikePost(post.id)}
                 className={`mr-2 ${
@@ -117,36 +161,33 @@ export default function UserProfilePage({
               >
                 {post.isLiked ? "♥" : "♡"} {post.likes_count}
               </button>
-            ) : (
-              <span className="text-gray-500 mr-2">♥ {post.likes_count}</span>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
+            </div>
+          </li>
+        ))}
+      </ul>
 
-  if (!profileUser) {
-    return <div>Loading...</div>;
-  }
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">
-        {profileUser.display_name}&apos;s Profile
-      </h1>
-      <p className="mb-4">@{profileUser.username}</p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">User&apos;s Posts</h2>
-          {renderPosts(userPosts)}
-        </div>
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Liked Posts</h2>
-          {renderPosts(likedPosts)}
-        </div>
-      </div>
+      <h2 className="text-2xl font-bold mb-4 text-black">Liked Posts</h2>
+      <ul className="space-y-4">
+        {likedPosts.map((post) => (
+          <li key={post.id} className="bg-white p-4 rounded shadow">
+            <p className="mb-2 text-black">{post.content}</p>
+            <small className="text-gray-500">
+              <Link href={`/users/${post.user_id}`} className="hover:underline">
+                {post.username}
+              </Link>{" "}
+              - {new Date(post.created_at).toLocaleString()}
+            </small>
+            <div className="mt-2">
+              <button
+                onClick={() => handleLikePost(post.id)}
+                className="text-red-500 mr-2"
+              >
+                ♥ {post.likes_count}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

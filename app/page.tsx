@@ -3,14 +3,13 @@
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
-import Sidebar from "./components/Sidebar";
 
 interface Post {
   id: string;
   content: string;
   created_at: string;
   updated_at: string;
-  user_id: string;
+  user_id: string; // Ensure this property exists
   username: string;
   display_name: string;
   isLiked: boolean;
@@ -19,6 +18,7 @@ interface Post {
   likes_count: number;
   reply_to_id?: string;
   replies?: Post[];
+  userId?: string; // Added userId property
 }
 
 export default function HomePage() {
@@ -27,12 +27,16 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
 
   const { user } = useUser();
 
   useEffect(() => {
     fetchPosts();
+    fetchFollowedUsers();
   }, []);
+
+  console.log(posts);
 
   async function fetchPosts(page = 1) {
     setIsLoading(true);
@@ -54,6 +58,18 @@ export default function HomePage() {
       console.error("Error fetching posts:", error);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function fetchFollowedUsers() {
+    try {
+      const response = await fetch("/api/users/following");
+      const data = await response.json();
+      if (data.followedUsers) {
+        setFollowedUsers(new Set(data.followedUsers));
+      }
+    } catch (error) {
+      console.error("Error fetching followed users:", error);
     }
   }
 
@@ -187,176 +203,205 @@ export default function HomePage() {
     }
   };
 
+  const handleFollowUser = async (userId: string) => {
+    if (!userId) {
+      console.error("User ID is undefined");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/users/${userId}/follow`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setFollowedUsers((prev) => {
+          const newSet = new Set(prev);
+          if (data.action === "followed") {
+            newSet.add(userId);
+          } else {
+            newSet.delete(userId);
+          }
+          return newSet;
+        });
+      } else {
+        console.error("Error following user:", data.error);
+      }
+    } catch (error) {
+      console.error("Error following user:", error);
+    }
+  };
+
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex-grow p-4 md:p-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-black">
-          Social Feed
-        </h1>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-white">
+        Social Feed
+      </h1>
 
-        <div className="order-1 md:order-2 mb-4 md:mb-0">
-          <h2 className="text-xl md:text-2xl font-semibold mb-4 text-black">
-            Create a Post
-          </h2>
-          <form
-            onSubmit={handlePostSubmit}
-            className="bg-white p-4 rounded shadow"
+      {/* Create Post Form */}
+      <div className="mb-4 md:mb-8">
+        <form
+          onSubmit={handlePostSubmit}
+          className="bg-white p-4 rounded shadow"
+        >
+          <textarea
+            value={newPostContent}
+            onChange={(e) => setNewPostContent(e.target.value)}
+            placeholder="What's on your mind?"
+            className="w-full p-2 border rounded mb-4 text-black text-sm"
+            rows={4}
+          />
+          <button
+            type="submit"
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full md:w-auto"
           >
-            <textarea
-              value={newPostContent}
-              onChange={(e) => setNewPostContent(e.target.value)}
-              placeholder="What's on your mind?"
-              className="w-full p-2 border rounded mb-4 text-black text-sm"
-              rows={4}
-            />
-            <button
-              type="submit"
-              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full md:w-auto"
-            >
-              Post
-            </button>
-          </form>
-        </div>
+            Post
+          </button>
+        </form>
+      </div>
 
-        <div className="grid grid-cols-1 gap-4 md:gap-8">
-          <div className="order-2 md:order-1">
-            <h2 className="text-xl md:text-2xl font-semibold mb-4 text-black">
-              Recent Posts
-            </h2>
-            <ul className="space-y-4">
-              {posts.map((post) => (
-                <li key={post.id} className="bg-white p-4 rounded shadow">
-                  <Link href={`/posts/${post.id}`} className="block">
-                    <p className="text-base md:text-lg mb-2 text-black">
-                      {post.content}
-                    </p>
-                    <small className="text-xs md:text-sm text-gray-500">
-                      <Link
-                        href={`/users/${post.user_id}`}
-                        className="hover:underline"
-                      >
-                        {post.username}
-                      </Link>{" "}
-                      -{" "}
-                      {post.is_edited
-                        ? `Edited on ${new Date(
-                            post.updated_at
-                          ).toLocaleString()}`
-                        : new Date(post.created_at).toLocaleString()}
+      {/* Posts List */}
+      <div className="space-y-4">
+        <ul className="space-y-4">
+          {posts.map((post) => (
+            <li key={post.id} className="bg-white p-4 rounded shadow">
+              <Link href={`/posts/${post.id}`} className="block">
+                <p className="text-base md:text-lg mb-2 text-black">
+                  {post.content}
+                </p>
+                <small className="text-xs md:text-sm text-gray-500">
+                  <Link
+                    href={`/users/${post.user_id}`}
+                    className="hover:underline"
+                  >
+                    {post.username}
+                  </Link>{" "}
+                  -{" "}
+                  {post.is_edited
+                    ? `Edited on ${new Date(post.updated_at).toLocaleString()}`
+                    : new Date(post.created_at).toLocaleString()}
+                </small>
+                {post.is_edited &&
+                  post.original_content &&
+                  post.original_content !== post.content && (
+                    <small className="text-gray-500 block">
+                      Original: {post.original_content}
                     </small>
-                    {post.is_edited &&
-                      post.original_content &&
-                      post.original_content !== post.content && (
-                        <small className="text-gray-500 block">
-                          Original: {post.original_content}
-                        </small>
-                      )}
-                  </Link>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {user && user.id !== post.user_id ? (
-                      <button
-                        onClick={() => handleLikePost(post.id)}
-                        className={`mr-2 ${
-                          post.isLiked ? "text-red-500" : "text-gray-500"
-                        }`}
-                      >
-                        {post.isLiked ? "♥" : "♡"} {post.likes_count}
-                      </button>
-                    ) : (
-                      <span className="text-gray-500 mr-2">
-                        ♥ {post.likes_count}
-                      </span>
-                    )}
-                    {user && user.id === post.user_id && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const newContent = prompt(
-                              "Edit your post:",
-                              post.content
-                            );
-                            if (newContent && newContent !== post.content) {
-                              console.log(`Editing post ${post.id}`);
-                              handleEditPost(Number(post.id), newContent);
-                            } else {
-                              console.log("Edit cancelled or no changes made");
-                            }
-                          }}
-                          className="text-blue-500 text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeletePost(Number(post.id))}
-                          className="text-red-500 text-sm"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {/* Add reply form */}
-                  {user && (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        const replyContent = (e.target as HTMLFormElement).reply
-                          .value;
-                        handleReplySubmit(post.id, replyContent);
-                        (e.target as HTMLFormElement).reply.value = "";
+                  )}
+              </Link>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {user && user.id !== post.user_id ? (
+                  <button
+                    onClick={() => handleLikePost(post.id)}
+                    className={`mr-2 ${
+                      post.isLiked ? "text-red-500" : "text-gray-500"
+                    }`}
+                  >
+                    {post.isLiked ? "♥" : "♡"} {post.likes_count}
+                  </button>
+                ) : (
+                  <span className="text-gray-500 mr-2">
+                    ♥ {post.likes_count}
+                  </span>
+                )}
+                {user && user.id !== post.user_id && (
+                  <button
+                    onClick={() => handleFollowUser(post.user_id)}
+                    className={`text-sm px-2 py-1 rounded ${
+                      followedUsers.has(post.user_id)
+                        ? "bg-red-500 text-white hover:bg-red-600"
+                        : "bg-blue-500 text-white hover:bg-blue-600"
+                    }`}
+                  >
+                    {followedUsers.has(post.user_id) ? "Unfollow" : "Follow"}
+                  </button>
+                )}
+                {user && user.id === post.user_id && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const newContent = prompt(
+                          "Edit your post:",
+                          post.content
+                        );
+                        if (newContent && newContent !== post.content) {
+                          console.log(`Editing post ${post.id}`);
+                          handleEditPost(Number(post.id), newContent);
+                        } else {
+                          console.log("Edit cancelled or no changes made");
+                        }
                       }}
-                      className="mt-2"
+                      className="text-blue-500 text-sm"
                     >
-                      <input
-                        type="text"
-                        name="reply"
-                        placeholder="Write a reply..."
-                        className="w-full p-2 border rounded text-black text-sm"
-                      />
-                      <button
-                        type="submit"
-                        className="mt-2 bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm"
-                      >
-                        Reply
-                      </button>
-                    </form>
-                  )}
-                  {/* Display replies */}
-                  {post.replies && post.replies.length > 0 && (
-                    <ul className="mt-4 space-y-2">
-                      {post.replies.map((reply) => (
-                        <li key={reply.id} className="bg-gray-100 p-2 rounded">
-                          <p className="text-xs md:text-sm text-black">
-                            {reply.content}
-                          </p>
-                          <small className="text-xs text-gray-500">
-                            <Link
-                              href={`/users/${reply.user_id}`}
-                              className="hover:underline"
-                            >
-                              {reply.username}
-                            </Link>{" "}
-                            - {new Date(reply.created_at).toLocaleString()}
-                          </small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {currentPage < totalPages && (
-              <button
-                onClick={handleLoadMore}
-                className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm w-full md:w-auto"
-                disabled={isLoading}
-              >
-                {isLoading ? "Loading..." : "Load More"}
-              </button>
-            )}
-          </div>
-        </div>
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeletePost(Number(post.id))}
+                      className="text-red-500 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Add reply form */}
+              {user && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const replyContent = (e.target as HTMLFormElement).reply
+                      .value;
+                    handleReplySubmit(post.id, replyContent);
+                    (e.target as HTMLFormElement).reply.value = "";
+                  }}
+                  className="mt-2"
+                >
+                  <input
+                    type="text"
+                    name="reply"
+                    placeholder="Write a reply..."
+                    className="w-full p-2 border rounded text-black text-sm"
+                  />
+                  <button
+                    type="submit"
+                    className="mt-2 bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm"
+                  >
+                    Reply
+                  </button>
+                </form>
+              )}
+              {/* Display replies */}
+              {post.replies && post.replies.length > 0 && (
+                <ul className="mt-4 space-y-2">
+                  {post.replies.map((reply) => (
+                    <li key={reply.id} className="bg-gray-100 p-2 rounded">
+                      <p className="text-xs md:text-sm text-black">
+                        {reply.content}
+                      </p>
+                      <small className="text-xs text-gray-500">
+                        <Link
+                          href={`/users/${reply.user_id}`}
+                          className="hover:underline"
+                        >
+                          {reply.username}
+                        </Link>{" "}
+                        - {new Date(reply.created_at).toLocaleString()}
+                      </small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+        {currentPage < totalPages && (
+          <button
+            onClick={handleLoadMore}
+            className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm w-full md:w-auto"
+            disabled={isLoading}
+          >
+            {isLoading ? "Loading..." : "Load More"}
+          </button>
+        )}
       </div>
     </div>
   );

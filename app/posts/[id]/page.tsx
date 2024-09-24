@@ -12,7 +12,7 @@ interface Post {
   id: string;
   isLiked: boolean;
   username: string;
-  userId: string;
+  user_id: string;
   original_content?: string;
   is_edited: boolean;
   likes_count: number;
@@ -22,6 +22,7 @@ interface Post {
 export default function PostPage() {
   const [post, setPost] = useState<Post | null>(null);
   const [newReplyContent, setNewReplyContent] = useState("");
+  const [isFollowing, setIsFollowing] = useState(false);
   const { id } = useParams();
   const router = useRouter();
   const { user } = useUser();
@@ -32,13 +33,22 @@ export default function PostPage() {
         const response = await fetch(`/api/posts/${id}`);
         const data = await response.json();
         setPost(data.post);
+
+        // Fetch follow status
+        if (user && data.post.user_id !== user.id) {
+          const followResponse = await fetch(
+            `/api/users/${data.post.user_id}/follow-status`
+          );
+          const followData = await followResponse.json();
+          setIsFollowing(followData.isFollowing);
+        }
       } catch (error) {
         console.error("Error fetching post:", error);
       }
     }
 
     fetchPost();
-  }, [id]);
+  }, [id, user]);
 
   const handleEditPost = async (newContent: string) => {
     console.log(`Attempting to edit post ${id} with content: ${newContent}`);
@@ -135,6 +145,22 @@ export default function PostPage() {
     }
   };
 
+  const handleFollowUser = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/follow`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (data.success) {
+        setIsFollowing(data.action === "followed");
+      } else {
+        console.error("Error following user:", data.error);
+      }
+    } catch (error) {
+      console.error("Error following user:", error);
+    }
+  };
+
   if (!post) {
     return <div>Loading...</div>;
   }
@@ -162,7 +188,7 @@ export default function PostPage() {
             </small>
           )}
         <div className="mt-4 flex items-center">
-          {user && user.id !== post.userId ? (
+          {user && user.id !== post.user_id ? (
             <button
               onClick={handleLikePost}
               className={`mr-2 ${
@@ -174,7 +200,7 @@ export default function PostPage() {
           ) : (
             <span className="text-gray-500 mr-2">♥ {post.likes_count}</span>
           )}
-          {user && user.id === post.userId && (
+          {user && user.id === post.user_id && (
             <>
               <button
                 onClick={() => {
@@ -194,6 +220,18 @@ export default function PostPage() {
                 Delete
               </button>
             </>
+          )}
+          {user && user.id !== post.user_id && (
+            <button
+              onClick={() => handleFollowUser(post.user_id)}
+              className={`text-sm px-2 py-1 rounded ${
+                isFollowing
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-blue-500 text-white hover:bg-blue-600"
+              }`}
+            >
+              {isFollowing ? "Unfollow" : "Follow"}
+            </button>
           )}
         </div>
       </div>
@@ -224,7 +262,7 @@ export default function PostPage() {
                 <p className="text-black">{reply.content}</p>
                 <small className="text-gray-500">
                   <Link
-                    href={`/users/${reply.userId}`}
+                    href={`/users/${reply.user_id}`}
                     className="hover:underline"
                   >
                     {reply.username}

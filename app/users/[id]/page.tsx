@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 
 interface Post {
   id: string;
@@ -27,6 +28,8 @@ export default function UserProfile({ params }: { params: { id: string } }) {
   const [likedPosts, setLikedPosts] = useState<Post[]>([]);
   // Change this line
   const [profileUser, setProfileUser] = useState<ProfileUser | null>(null);
+
+  const { user } = useUser();
 
   useEffect(() => {
     async function fetchUserData() {
@@ -131,20 +134,36 @@ export default function UserProfile({ params }: { params: { id: string } }) {
     }
   };
 
+  const handleFollowUser = async () => {
+    try {
+      const response = await fetch(`/api/users/${params.id}/follow`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (data.success) {
+        // Optionally, you can update the UI to reflect the follow status
+      } else {
+        console.error("Error following user:", data.error);
+      }
+    } catch (error) {
+      console.error("Error following user:", error);
+    }
+  };
+
   if (!profileUser) {
     return <div>Loading...</div>;
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-4 text-black">
+      <h1 className="text-3xl font-bold mb-4 text-white">
         {profileUser.username}&apos;s Profile
       </h1>
-      <p className="mb-8 text-black">
+      <p className="mb-8 text-white">
         Display Name: {profileUser.display_name}
       </p>
 
-      <h2 className="text-2xl font-bold mb-4 text-black">User&apos;s Posts</h2>
+      <h2 className="text-2xl font-bold mb-4 text-white">User&apos;s Posts</h2>
       <ul className="space-y-4 mb-8">
         {userPosts.map((post) => (
           <li key={post.id} className="bg-white p-4 rounded shadow">
@@ -166,7 +185,7 @@ export default function UserProfile({ params }: { params: { id: string } }) {
         ))}
       </ul>
 
-      <h2 className="text-2xl font-bold mb-4 text-black">Liked Posts</h2>
+      <h2 className="text-2xl font-bold mb-4 text-white">Liked Posts</h2>
       <ul className="space-y-4">
         {likedPosts.map((post) => (
           <li key={post.id} className="bg-white p-4 rounded shadow">
@@ -188,6 +207,15 @@ export default function UserProfile({ params }: { params: { id: string } }) {
           </li>
         ))}
       </ul>
+
+      {user && user.id !== params.id && (
+        <button
+          onClick={handleFollowUser}
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        >
+          Follow
+        </button>
+      )}
     </div>
   );
 }
